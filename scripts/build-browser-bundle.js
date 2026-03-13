@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const projectRoot = path.join(__dirname, "..");
+const publicRoot = path.join(projectRoot, "public");
 const sourceFiles = [
   "app/shared/config.mjs",
   "app/shared/rng.mjs",
@@ -11,6 +12,7 @@ const sourceFiles = [
   "app/engine/create-engine.mjs",
   "app/render/canvas-renderer.mjs",
   "app/ui/ui-controller.mjs",
+  "app/remote/create-remote-client.mjs",
   "app/bootstrap.mjs",
 ];
 
@@ -42,6 +44,23 @@ function createBundle() {
   ].join("\n");
 }
 
-const outputPath = path.join(projectRoot, "script.js");
-fs.writeFileSync(outputPath, createBundle(), "utf8");
-console.log(`Wrote ${outputPath}`);
+function syncStaticAssets(bundleSource) {
+  fs.mkdirSync(publicRoot, { recursive: true });
+
+  const rootBundlePath = path.join(projectRoot, "script.js");
+  const publicBundlePath = path.join(publicRoot, "script.js");
+  fs.writeFileSync(rootBundlePath, bundleSource, "utf8");
+  fs.writeFileSync(publicBundlePath, bundleSource, "utf8");
+
+  for (const assetName of ["index.html", "styles.css"]) {
+    fs.copyFileSync(
+      path.join(projectRoot, assetName),
+      path.join(publicRoot, assetName)
+    );
+  }
+
+  console.log(`Wrote ${rootBundlePath}`);
+  console.log(`Synced static assets to ${publicRoot}`);
+}
+
+syncStaticAssets(createBundle());

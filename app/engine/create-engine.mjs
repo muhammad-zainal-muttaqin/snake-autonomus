@@ -10,9 +10,10 @@ import {
   oppositeDirection,
   sameCell,
 } from "../shared/geometry.mjs";
-import { createRng } from "../shared/rng.mjs";
+import { createRng, createRngFromState } from "../shared/rng.mjs";
 
 const STARTING_SNAKE_LENGTH = 3;
+const ENGINE_STATE_VERSION = 1;
 
 function cloneDirection(direction) {
   return {
@@ -28,13 +29,60 @@ function clonePoint(point) {
   };
 }
 
-function getGrowthIntervalForSize(arenaSize, config) {
+function getBaseGrowthIntervalForSize(arenaSize, config) {
   const { initialSize, growthInterval, growthLogRamp, growthLogExponent } = config.world;
   const sizeRatio = Math.max(1, arenaSize / initialSize);
   const logDistance = Math.log2(sizeRatio);
   return (
     growthInterval +
     Math.max(0, Math.floor((logDistance ** growthLogExponent) * growthLogRamp))
+  );
+}
+
+function getOccupancyRatio(state) {
+  const boardArea = Math.max(1, state.arenaSize * state.arenaSize);
+  const totalLength = state.snakes.red.storedLength + state.snakes.cyan.storedLength;
+  return totalLength / boardArea;
+}
+
+function getPathPressure(state) {
+  return (
+    Math.max(state.snakes.red.storedLength, state.snakes.cyan.storedLength) /
+    Math.max(1, state.arenaSize)
+  );
+}
+
+function getGrowthIntervalForState(state, config) {
+  const baseInterval = getBaseGrowthIntervalForSize(state.arenaSize, config);
+  if (!config.world.adaptiveGrowthEnabled) {
+    return baseInterval;
+  }
+
+  const occupancy = getOccupancyRatio(state);
+  const pathPressure = getPathPressure(state);
+  let multiplier = 1;
+
+  if (
+    occupancy > config.world.hardOccupancyThreshold ||
+    pathPressure > config.world.hardPathPressureThreshold
+  ) {
+    multiplier = 0.65;
+  } else if (
+    occupancy > config.world.targetOccupancyMax ||
+    pathPressure > config.world.targetPathPressure
+  ) {
+    multiplier = 0.82;
+  } else if (
+    occupancy < config.world.lowOccupancyThreshold &&
+    pathPressure < config.world.lowPathPressureThreshold
+  ) {
+    multiplier = 1.1;
+  }
+
+  return clamp(
+    Math.round(baseInterval * multiplier),
+    config.world.minGrowthInterval,
+    config.world.maxGrowthInterval
   );
 }
 
@@ -45,7 +93,7 @@ function getFoodsUntilGrowth(state, config) {
   ) {
     return 0;
   }
-  const currentInterval = getGrowthIntervalForSize(state.arenaSize, config);
+  const currentInterval = getGrowthIntervalForState(state, config);
   return Math.max(0, currentInterval - state.foodsSinceGrowth);
 }
 
@@ -68,6 +116,7 @@ function createSnakeState(meta) {
 
 function createInitialState(config) {
   return {
+    schemaVersion: ENGINE_STATE_VERSION,
     version: 0,
     tickRate: config.tickRate,
     paused: false,
@@ -89,6 +138,115 @@ function createInitialState(config) {
     },
     events: [],
   };
+}
+
+function cloneDecision(decision) {
+  if (!decision) {
+    return null;
+  }
+  return {
+    ...decision,
+    direction: decision.direction ? cloneDirection(decision.direction) : null,
+    target: decision.target ? clonePoint(decision.target) : null,
+    debug: decision.debug ? { ...decision.debug } : null,
+  };
+}
+
+function cloneLastRound(lastRound) {
+  return lastRound
+    ? {
+        ...lastRound,
+      }
+    : null;
+}
+
+function cloneSnakeState(snake) {
+  return {
+    id: snake.id,
+    name: snake.name,
+    palette: snake.palette,
+    score: snake.score,
+    storedLength: snake.storedLength,
+    alive: snake.alive,
+    body: snake.body.map(clonePoint),
+    direction: cloneDirection(snake.direction),
+    status: snake.status,
+    mode: snake.mode,
+    lastDecision: cloneDecision(snake.lastDecision),
+    recentHeadKeys: [...snake.recentHeadKeys],
+  };
+}
+
+function serializeState(state) {
+  return {
+    schemaVersion: ENGINE_STATE_VERSION,
+    version: state.version,
+    tickRate: state.tickRate,
+    paused: state.paused,
+    phase: state.phase,
+    roundNumber: state.roundNumber,
+    roundTick: state.roundTick,
+    matchTick: state.matchTick,
+    arenaSize: state.arenaSize,
+    totalFoodEaten: state.totalFoodEaten,
+    foodsSinceGrowth: state.foodsSinceGrowth,
+    growths: state.growths,
+    intermissionTicksRemaining: state.intermissionTicksRemaining,
+    food: state.food ? clonePoint(state.food) : null,
+    lastRound: cloneLastRound(state.lastRound),
+    matchWinnerId: state.matchWinnerId,
+    snakes: {
+      red: cloneSnakeState(state.snakes.red),
+      cyan: cloneSnakeState(state.snakes.cyan),
+    },
+  };
+}
+
+function hydrateState(persistedState, config) {
+  const baseState = createInitialState(config);
+  if (!persistedState || typeof persistedState !== "object") {
+    return baseState;
+  }
+
+  const nextState = {
+    ...baseState,
+    ...persistedState,
+    schemaVersion: ENGINE_STATE_VERSION,
+    food: persistedState.food ? clonePoint(persistedState.food) : null,
+    lastRound: cloneLastRound(persistedState.lastRound),
+    snakes: {
+      red: persistedState.snakes?.red
+        ? cloneSnakeState(persistedState.snakes.red)
+        : cloneSnakeState(baseState.snakes.red),
+      cyan: persistedState.snakes?.cyan
+        ? cloneSnakeState(persistedState.snakes.cyan)
+        : cloneSnakeState(baseState.snakes.cyan),
+    },
+    events: [],
+  };
+
+  nextState.version = Math.max(0, Number(nextState.version) || 0);
+  nextState.tickRate = clamp(
+    Math.round(Number(nextState.tickRate) || config.tickRate),
+    1,
+    4096
+  );
+  nextState.roundNumber = Math.max(1, Number(nextState.roundNumber) || 1);
+  nextState.roundTick = Math.max(0, Number(nextState.roundTick) || 0);
+  nextState.matchTick = Math.max(0, Number(nextState.matchTick) || 0);
+  nextState.arenaSize = Math.max(
+    config.world.initialSize,
+    Math.round(Number(nextState.arenaSize) || config.world.initialSize)
+  );
+  nextState.totalFoodEaten = Math.max(0, Number(nextState.totalFoodEaten) || 0);
+  nextState.foodsSinceGrowth = Math.max(0, Number(nextState.foodsSinceGrowth) || 0);
+  nextState.growths = Math.max(0, Number(nextState.growths) || 0);
+  nextState.intermissionTicksRemaining = Math.max(
+    0,
+    Number(nextState.intermissionTicksRemaining) || 0
+  );
+
+  return nextState;
 }
 
 function queueEvent(state, type, payload = {}) {
@@ -332,7 +490,7 @@ function detectCollision(result, state, nextHeads, growsBySnake) {
 }
 
 function applyGrowth(state, config) {
-  const currentInterval = getGrowthIntervalForSize(state.arenaSize, config);
+  const currentInterval = getGrowthIntervalForState(state, config);
   if (state.foodsSinceGrowth < currentInterval) {
     return;
   }
@@ -445,9 +603,11 @@ function createSnapshot(state, config) {
       size: state.arenaSize,
       maxSize: config.world.maxSize,
       totalFoodEaten: state.totalFoodEaten,
-      growthInterval: getGrowthIntervalForSize(state.arenaSize, config),
+      growthInterval: getGrowthIntervalForState(state, config),
       foodsUntilGrowth: getFoodsUntilGrowth(state, config),
       growths: state.growths,
+      occupancy: getOccupancyRatio(state),
+      pathPressure: getPathPressure(state),
       width: state.arenaSize,
       height: state.arenaSize,
     },
@@ -478,12 +638,19 @@ function createSnapshot(state, config) {
 }
 
 export function createEngine(overrides = {}) {
-  const config = createConfig(overrides);
-  let rng = createRng(config.seed);
-  const state = createInitialState(config);
+  const { persistedState = null, persistedRngState = null, ...configOverrides } = overrides;
+  const config = createConfig(configOverrides);
+  let rng = persistedRngState == null
+    ? createRng(config.seed)
+    : createRngFromState(persistedRngState);
+  const state = persistedState
+    ? hydrateState(persistedState, config)
+    : createInitialState(config);
 
-  startRound(state, config, rng);
-  state.version += 1;
+  if (!persistedState) {
+    startRound(state, config, rng);
+    state.version += 1;
+  }
 
   function advanceIntermission() {
     if (state.phase !== "round_intermission") {
@@ -569,7 +736,10 @@ export function createEngine(overrides = {}) {
     }
 
     if (eaterId) {
-      state.snakes[eaterId].storedLength += 1;
+      state.snakes[eaterId].storedLength = Math.min(
+        state.snakes[eaterId].storedLength + 1,
+        config.world.maxStoredLength
+      );
       state.totalFoodEaten += 1;
       state.foodsSinceGrowth += 1;
       queueEvent(state, "food_eaten", {
@@ -613,6 +783,18 @@ export function createEngine(overrides = {}) {
     });
     startRound(state, config, rng);
     state.version += 1;
+  }
+
+  function stepMany(count) {
+    let steps = 0;
+    const target = Math.max(0, Math.floor(Number(count) || 0));
+    while (steps < target) {
+      if (!step()) {
+        break;
+      }
+      steps += 1;
+    }
+    return steps;
   }
 
   function setPaused(nextPaused) {
@@ -674,9 +856,18 @@ export function createEngine(overrides = {}) {
     }
   }
 
+  function exportState() {
+    return {
+      schemaVersion: ENGINE_STATE_VERSION,
+      rngState: rng.state(),
+      state: serializeState(state),
+    };
+  }
+
   return {
     config,
     step,
+    stepMany,
     resetMatch,
     setPaused,
     setTickRate,
@@ -684,5 +875,6 @@ export function createEngine(overrides = {}) {
     consumeEvents,
     getMeta,
     debugMutate,
+    exportState,
   };
 }

@@ -88,6 +88,42 @@ export function getMajorNotice(event) {
     return null;
   }
 
+  if (event.type === "remote_connected") {
+    return {
+      tone: "match",
+      title: "Global arena live",
+      detail: event.detail,
+      speak: "Connected to the global arena.",
+    };
+  }
+
+  if (event.type === "remote_disconnected") {
+    return {
+      tone: "round",
+      title: "Reconnecting",
+      detail: event.detail,
+      speak: "Remote stream disconnected. Reconnecting.",
+    };
+  }
+
+  if (event.type === "remote_unauthorized") {
+    return {
+      tone: "round",
+      title: "Admin key rejected",
+      detail: event.detail,
+      speak: "Admin secret rejected.",
+    };
+  }
+
+  if (event.type === "admin_unlocked") {
+    return {
+      tone: "match",
+      title: "Admin unlocked",
+      detail: event.detail,
+      speak: "Admin controls unlocked.",
+    };
+  }
+
   if (event.type === "match_reset") {
     return {
       tone: "round",

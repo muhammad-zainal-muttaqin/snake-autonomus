@@ -19,6 +19,7 @@ The app stays intentionally lightweight:
 - static HTML/CSS shell
 - modular source code under `app/`
 - generated browser bundle in `script.js` for `file://` and static hosting use
+- Cloudflare Worker + Durable Object path for one persistent global arena
 
 ## Current Gameplay Rules
 
@@ -53,13 +54,23 @@ The app stays intentionally lightweight:
 |   |   |-- geometry.mjs
 |   |   |-- rng.mjs
 |   |   `-- selectors.mjs
+|   |-- remote/
+|   |   `-- create-remote-client.mjs
 |   `-- ui/
 |       `-- ui-controller.mjs
+|-- public/
+|   |-- index.html
+|   |-- styles.css
+|   `-- script.js
 `-- scripts/
     |-- benchmark-simulation.js
     |-- build-browser-bundle.js
     |-- optimize-iterations.js
     `-- perf-iterations.json
+|-- worker/
+|   `-- index.mjs
+|-- wrangler.jsonc
+`-- package.json
 ```
 
 ## Architecture
@@ -72,6 +83,7 @@ The modular source lives under `app/`.
 - `app/ai/choose-move.mjs`: snake decision logic, including contested-food tactical lookahead
 - `app/render/canvas-renderer.mjs`: canvas drawing only
 - `app/ui/ui-controller.mjs`: DOM bindings, HUD sync, notices, and controls
+- `app/remote/create-remote-client.mjs`: browser remote-mode transport for the Cloudflare arena
 - `app/shared/*.mjs`: config, geometry helpers, RNG, and display selectors
 - `app/bootstrap.mjs`: browser runtime bootstrap and scheduler wiring
 
@@ -87,7 +99,17 @@ If you change anything under `app/`, rebuild `script.js`:
 node scripts\build-browser-bundle.js
 ```
 
+That command also syncs `index.html`, `styles.css`, and the generated bundle into `public/` for Cloudflare static asset serving.
+
 Do not treat `script.js` as the primary edit target unless you are fixing the bundle output itself.
+
+### Cloudflare runtime
+
+The repository now includes a Cloudflare deployment path:
+
+- `worker/index.mjs`: Worker entrypoint plus the global Durable Object arena
+- `wrangler.jsonc`: Worker, static asset, Durable Object, and env configuration
+- `public/`: synced static assets served by Workers Static Assets
 
 ### Simulation model
 
@@ -158,6 +180,14 @@ If you changed contested-food AI, run the targeted scenario too:
 node scripts\benchmark-simulation.js 64 5 food-clash
 ```
 
+### 4. Run Cloudflare locally
+
+```powershell
+npm install
+npm run build
+npm run dev:cf
+```
+
 ## Benchmark Scenarios
 
 `scripts/benchmark-simulation.js` currently supports:
@@ -179,6 +209,8 @@ Useful output fields:
 - `effectiveTicksPerSecond`
 - `roundsCompleted`
 - `maxWidth`
+- `occupancy`
+- `pathPressure`
 - `foodCount`
 - `redStatus`
 - `cyanStatus`
@@ -209,6 +241,7 @@ Notable ones:
 - default browser tick rate: `64`
 - UI speed slider max: `2048`
 - logarithmic arena growth ramp: `2`
+- adaptive growth controller: enabled
 - persistent length across rounds: enabled
 - tactical food-contest lookahead: enabled
 

@@ -175,6 +175,8 @@ async function runBenchmark({
     roundNumber: snapshot.roundNumber,
     width: snapshot.arena.width,
     height: snapshot.arena.height,
+    occupancy: Number((snapshot.arena.occupancy ?? 0).toFixed(3)),
+    pathPressure: Number((snapshot.arena.pathPressure ?? 0).toFixed(3)),
     foodCount: snapshot.arena.totalFoodEaten,
     red: snapshot.snakes.red.score,
     cyan: snapshot.snakes.cyan.score,

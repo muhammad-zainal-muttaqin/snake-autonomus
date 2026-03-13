@@ -11,10 +11,14 @@ This repository is a framework-free browser app with modular source code and a g
 - `app/ai/choose-move.mjs`: snake AI and tactical food-contest lookahead.
 - `app/render/canvas-renderer.mjs`: canvas rendering only.
 - `app/ui/ui-controller.mjs`: HUD sync, controls, and accessibility text.
+- `app/remote/create-remote-client.mjs`: browser remote-mode transport for Cloudflare.
 - `app/shared/*.mjs`: shared config, geometry helpers, RNG, and selectors.
 - `script.js`: generated browser bundle built from `app/`; do not treat this as the primary source file.
+- `public/`: synced static assets for Workers Static Assets.
 - `scripts/benchmark-simulation.js`: headless benchmark harness that imports the same engine used by the browser runtime.
 - `scripts/build-browser-bundle.js`: regenerates `script.js` from the `app/` modules.
+- `worker/index.mjs`: Worker entrypoint and Durable Object implementation.
+- `wrangler.jsonc`: Cloudflare deployment configuration.
 
 Put new runtime logic in the relevant `app/` module. Rebuild `script.js` after source changes.
 
@@ -23,7 +27,7 @@ Put new runtime logic in the relevant `app/` module. Rebuild `script.js` after s
 - `python -m http.server 8000`
   Runs a local static server for browser testing.
 - `node scripts\build-browser-bundle.js`
-  Regenerates `script.js` from the modular source in `app/`.
+  Regenerates `script.js` from the modular source in `app/` and syncs static assets to `public/`.
 - `node --check script.js`
   Validates JavaScript syntax for the generated browser bundle.
 - `node --check scripts\benchmark-simulation.js`
@@ -34,6 +38,8 @@ Put new runtime logic in the relevant `app/` module. Rebuild `script.js` after s
   Runs a higher-speed headless benchmark.
 - `node scripts\benchmark-simulation.js 64 5 food-clash`
   Runs the targeted contested-food AI regression scenario.
+- `node --check worker\index.mjs`
+  Validates syntax for the Cloudflare Worker entrypoint.
 
 ## Coding Style & Naming Conventions
 
@@ -62,7 +68,8 @@ Minimum verification for runtime changes:
 1. `node scripts\build-browser-bundle.js`
 2. `node --check script.js`
 3. `node --check scripts\benchmark-simulation.js`
-4. `node scripts\benchmark-simulation.js 1024 4000`
+4. `node --check worker\index.mjs`
+5. `node scripts\benchmark-simulation.js 1024 4000`
 
 Additional verification when relevant:
 

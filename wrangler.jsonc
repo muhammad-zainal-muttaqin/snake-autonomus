@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "snake-autonomus",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-03-14",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GLOBAL_ARENA",
+        "class_name": "GlobalArena"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["GlobalArena"]
+    }
+  ],
+  "vars": {
+    "LIVE_SERVER_TPS": "512",
+    "VIEWER_STREAM_FPS": "60",
+    "REMOTE_MAX_ARENA_SIZE": "96",
+    "REMOTE_MAX_STORED_LENGTH": "1024",
+    "REMOTE_TICK_RATE_OPTIONS": "60,120,240,512",
+    "REMOTE_ALARM_INTERVAL_MS": "1000"
+  }
+}

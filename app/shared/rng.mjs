@@ -35,3 +35,11 @@ export function createRng(seed) {
     },
   };
 }
+
+export function createRngFromState(seedState) {
+  const normalizedState =
+    typeof seedState === "number" && Number.isFinite(seedState)
+      ? seedState >>> 0
+      : hashSeed(seedState);
+  return createRng(normalizedState || 0x6d2b79f5);
+}

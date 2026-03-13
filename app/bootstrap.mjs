@@ -1,4 +1,5 @@
 import { createEngine } from "./engine/create-engine.mjs";
+import { createRemoteClient, shouldPreferRemoteMode } from "./remote/create-remote-client.mjs";
 import { createCanvasRenderer } from "./render/canvas-renderer.mjs";
 import { clamp } from "./shared/geometry.mjs";
 import { createUiController } from "./ui/ui-controller.mjs";
@@ -67,21 +68,29 @@ function getElements() {
   };
 }
 
-export function bootstrap() {
-  const elements = getElements();
-  if (!elements.canvas) {
-    throw new Error("Missing #game canvas.");
-  }
+function createViewState(elements) {
+  return {
+    zoom: clamp(Number(elements.zoomInput?.value) || 1, ZOOM_MIN, ZOOM_MAX),
+    isRemote: false,
+    canControl: true,
+    viewerStreamFps: 60,
+    allowedTickRates: [],
+  };
+}
 
+function setSpeedRange(elements, min, max, step = 1) {
+  if (!elements.speedInput) {
+    return;
+  }
+  elements.speedInput.min = String(min);
+  elements.speedInput.max = String(max);
+  elements.speedInput.step = String(step);
+}
+
+function createLocalRuntime(elements, renderer, ui, viewState) {
   const engine = createEngine({
     tickRate: Number(elements.speedInput?.value) || 64,
   });
-  const renderer = createCanvasRenderer(elements.canvas, createThemeFromCss());
-  const ui = createUiController(elements, window);
-  const viewState = {
-    zoom: clamp(Number(elements.zoomInput?.value) || 1, ZOOM_MIN, ZOOM_MAX),
-  };
-
   let pendingEvents = engine.consumeEvents();
   let animationFrameHandle = null;
   let simulationTimerHandle = null;
@@ -212,14 +221,119 @@ export function bootstrap() {
     },
   });
 
+  setSpeedRange(elements, 4, 2048);
+  syncNow();
+
+  return {
+    mode: "local",
+    engine,
+    destroy() {
+      stopSimulation();
+      if (animationFrameHandle !== null) {
+        window.cancelAnimationFrame(animationFrameHandle);
+      }
+    },
+  };
+}
+
+async function createRemoteRuntime(elements, renderer, ui, viewState) {
+  const remoteClient = createRemoteClient({
+    windowObject: window,
+    fetchImpl: window.fetch.bind(window),
+    locationObject: window.location,
+    sessionStorageObject: window.sessionStorage,
+  });
+
+  let latestSnapshot = null;
+  let pendingEvents = [];
+  let animationFrameHandle = null;
+
+  function scheduleRender() {
+    if (animationFrameHandle !== null || !latestSnapshot) {
+      return;
+    }
+    animationFrameHandle = window.requestAnimationFrame(() => {
+      animationFrameHandle = null;
+      renderer.render(latestSnapshot, viewState);
+      ui.update(latestSnapshot, pendingEvents.splice(0), viewState);
+    });
+  }
+
+  await remoteClient.start({
+    onFrame(snapshot, events, remoteState) {
+      latestSnapshot = snapshot;
+      pendingEvents.push(...events);
+      viewState.isRemote = true;
+      viewState.canControl = remoteState.canControl;
+      viewState.viewerStreamFps = remoteState.viewerStreamFps;
+      viewState.allowedTickRates = remoteState.allowedTickRates;
+      if (remoteState.allowedTickRates.length) {
+        setSpeedRange(
+          elements,
+          remoteState.allowedTickRates[0],
+          remoteState.allowedTickRates[remoteState.allowedTickRates.length - 1]
+        );
+      }
+      scheduleRender();
+    },
+  });
+
+  ui.bind({
+    async onToggleRun() {
+      await remoteClient.toggleRun();
+    },
+    async onRestart() {
+      await remoteClient.restart();
+    },
+    async onSpeedChange(value) {
+      await remoteClient.setTickRate(value);
+    },
+    onZoomChange(value) {
+      viewState.zoom = clamp(value, ZOOM_MIN, ZOOM_MAX);
+      scheduleRender();
+    },
+    onZoomNudge(delta) {
+      viewState.zoom = clamp(viewState.zoom + delta, ZOOM_MIN, ZOOM_MAX);
+      if (elements.zoomInput) {
+        elements.zoomInput.value = String(viewState.zoom);
+      }
+      scheduleRender();
+    },
+  });
+
+  return {
+    mode: "remote",
+    remoteClient,
+    destroy() {
+      if (animationFrameHandle !== null) {
+        window.cancelAnimationFrame(animationFrameHandle);
+      }
+      remoteClient.stop();
+    },
+  };
+}
+
+export async function bootstrap() {
+  const elements = getElements();
+  if (!elements.canvas) {
+    throw new Error("Missing #game canvas.");
+  }
+
+  const renderer = createCanvasRenderer(elements.canvas, createThemeFromCss());
+  const ui = createUiController(elements, window);
+  const viewState = createViewState(elements);
+
   if (elements.zoomInput) {
     elements.zoomInput.step = String(ZOOM_STEP);
   }
 
-  syncNow();
+  if (shouldPreferRemoteMode(window.location)) {
+    try {
+      return await createRemoteRuntime(elements, renderer, ui, viewState);
+    } catch (error) {
+      console.warn("Remote arena bootstrap failed. Falling back to local mode.", error);
+    }
+  }
 
-  return {
-    engine,
-    renderer,
-  };
+  return createLocalRuntime(elements, renderer, ui, viewState);
 }
