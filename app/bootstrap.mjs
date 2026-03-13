@@ -132,7 +132,11 @@ function createLocalRuntime(elements, renderer, ui, viewState) {
   function renderFrame() {
     animationFrameHandle = null;
     const snapshot = engine.getSnapshot();
-    renderer.render(snapshot, viewState);
+    try {
+      renderer.render(snapshot, viewState);
+    } catch (error) {
+      console.error("Snake arena render failed.", error);
+    }
     ui.update(snapshot, flushEvents(), viewState);
     syncSimulationLoop();
   }
@@ -254,7 +258,11 @@ async function createRemoteRuntime(elements, renderer, ui, viewState) {
     }
     animationFrameHandle = window.requestAnimationFrame(() => {
       animationFrameHandle = null;
-      renderer.render(latestSnapshot, viewState);
+      try {
+        renderer.render(latestSnapshot, viewState);
+      } catch (error) {
+        console.error("Snake arena render failed.", error);
+      }
       ui.update(latestSnapshot, pendingEvents.splice(0), viewState);
     });
   }

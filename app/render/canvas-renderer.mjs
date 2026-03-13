@@ -25,7 +25,11 @@ const DEFAULT_THEME = {
 
 function fillRoundedRect(context, x, y, width, height, radius, fillStyle) {
   context.beginPath();
-  context.roundRect(x, y, width, height, radius);
+  if (typeof context.roundRect === "function") {
+    context.roundRect(x, y, width, height, radius);
+  } else {
+    context.rect(x, y, width, height);
+  }
   context.fillStyle = fillStyle;
   context.fill();
 }
@@ -63,10 +67,15 @@ function getOverlayText(snapshot) {
 }
 
 export function createCanvasRenderer(canvas, theme = {}) {
-  const context = canvas.getContext("2d", { alpha: false, desynchronized: true });
+  const context =
+    canvas.getContext("2d", { alpha: false, desynchronized: true }) ||
+    canvas.getContext("2d");
   const palette = createPalette(theme);
 
   function render(snapshot, viewState = {}) {
+    if (!context) {
+      return;
+    }
     const zoom = clamp(Number(viewState.zoom) || 1, 0.55, 2.2);
     const { width, height } = canvas;
     const padding = 28;
@@ -95,7 +104,11 @@ export function createCanvasRenderer(canvas, theme = {}) {
 
     context.save();
     context.beginPath();
-    context.roundRect(originX, originY, boardPixelSize, boardPixelSize, 26);
+    if (typeof context.roundRect === "function") {
+      context.roundRect(originX, originY, boardPixelSize, boardPixelSize, 26);
+    } else {
+      context.rect(originX, originY, boardPixelSize, boardPixelSize);
+    }
     context.clip();
 
     if (cellSize >= 9) {
@@ -162,7 +175,11 @@ export function createCanvasRenderer(canvas, theme = {}) {
     context.strokeStyle = palette.boardBorder;
     context.lineWidth = 1.5;
     context.beginPath();
-    context.roundRect(originX, originY, boardPixelSize, boardPixelSize, 26);
+    if (typeof context.roundRect === "function") {
+      context.roundRect(originX, originY, boardPixelSize, boardPixelSize, 26);
+    } else {
+      context.rect(originX, originY, boardPixelSize, boardPixelSize);
+    }
     context.stroke();
 
     const overlayText = getOverlayText(snapshot);
