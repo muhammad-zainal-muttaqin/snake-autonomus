@@ -19,6 +19,7 @@ const sourceFiles = [
 function stripModuleSyntax(source) {
   return source
     .replace(/^import[\s\S]*?;\r?\n/gm, "")
+    .replace(/^export async function /gm, "async function ")
     .replace(/^export function /gm, "function ")
     .replace(/^export const /gm, "const ")
     .replace(/^export class /gm, "class ")

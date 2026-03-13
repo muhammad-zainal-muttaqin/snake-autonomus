@@ -2994,7 +2994,7 @@ async function createRemoteRuntime(elements, renderer, ui, viewState) {
   };
 }
 
-export async function bootstrap() {
+async function bootstrap() {
   const elements = getElements();
   if (!elements.canvas) {
     throw new Error("Missing #game canvas.");
