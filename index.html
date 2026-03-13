@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autonomous Snake 1v1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <p class="eyebrow">Classic arcade duel</p>
+      <h1>Snake 1v1 Autonomous Arena</h1>
+      <p class="subtitle">
+        Two bots race for apples, trap each other, and fight to survive on the same board.
+      </p>
+    </header>
+
+    <section class="match-layout">
+      <section class="arena-stage" aria-labelledby="arena-title">
+        <div class="stage-header">
+          <div>
+            <p class="section-kicker">Live arena</p>
+            <h2 id="arena-title">One board, two bots, no downtime</h2>
+          </div>
+          <p class="stage-copy">
+            Watch the routes tighten, the arena expand, and the score keep climbing while you tune the simulation in real time.
+          </p>
+        </div>
+
+        <div class="score-strip" aria-label="Match status">
+          <article class="score-pill score-pill-red">
+            <span class="score-label">Red wins</span>
+            <strong id="red-score">0</strong>
+            <span class="score-detail" id="red-status">Hunting</span>
+          </article>
+          <article class="score-pill score-pill-round">
+            <span class="score-label">Round</span>
+            <strong id="round-count">1</strong>
+            <span class="score-detail" id="round-status">In progress</span>
+          </article>
+          <article class="score-pill score-pill-cyan">
+            <span class="score-label">Cyan wins</span>
+            <strong id="cyan-score">0</strong>
+            <span class="score-detail" id="cyan-status">Hunting</span>
+          </article>
+          <article class="score-pill score-pill-arena">
+            <span class="score-label">Arena</span>
+            <strong id="arena-size">16 x 16</strong>
+            <span class="score-detail" id="arena-growth">Compact start</span>
+          </article>
+        </div>
+
+        <div class="arena-notice-slot" aria-live="polite" aria-atomic="true">
+          <div class="arena-notice" id="arena-notice" hidden>
+            <strong id="arena-notice-title">Round update</strong>
+            <span id="arena-notice-detail"></span>
+          </div>
+        </div>
+
+        <p class="arena-summary sr-only" id="arena-summary">
+          Round 1 live. Red Viper and Cyan Cobra are hunting in a 16 x 16 arena.
+        </p>
+        <p class="sr-only" id="sr-status" aria-live="polite" aria-atomic="true"></p>
+        <div class="arena-board">
+          <canvas
+            id="game"
+            width="720"
+            height="720"
+            role="img"
+            aria-labelledby="arena-title"
+            aria-describedby="arena-summary sr-status"
+          >
+            The live autonomous snake arena renders here.
+          </canvas>
+        </div>
+      </section>
+
+      <aside class="control-rail" aria-labelledby="control-title">
+        <div class="rail-header">
+          <p class="section-kicker">Control desk</p>
+          <h2 id="control-title">Tune the duel without losing the board</h2>
+          <p class="rail-copy">
+            Change pace, tighten the camera, or reset the match. Everything here is built to stay readable at a glance.
+          </p>
+        </div>
+
+        <section class="control-section action-section" aria-labelledby="action-title">
+          <h3 id="action-title">Match controls</h3>
+          <div class="button-row">
+            <button id="toggle-run" type="button" aria-pressed="false" aria-label="Pause match">Pause</button>
+            <button id="restart" type="button" class="button-secondary">Restart match</button>
+          </div>
+        </section>
+
+        <section class="control-section" aria-labelledby="speed-title">
+          <label class="control-group" for="speed">
+            <div class="control-heading">
+              <span id="speed-title">Speed</span>
+              <output id="speed-value" for="speed">64 TPS</output>
+            </div>
+            <input id="speed" type="range" min="4" max="2048" value="64" aria-describedby="speed-note">
+          </label>
+          <p class="control-note" id="speed-note">
+            Raise TPS up to 2048 to stress-test the bots or slow it down to study how each route develops.
+          </p>
+        </section>
+
+        <section class="control-section" aria-labelledby="zoom-title">
+          <div class="control-heading">
+            <span id="zoom-title">Zoom</span>
+            <output id="zoom-value" for="zoom">1.00x</output>
+          </div>
+          <label class="sr-only" for="zoom">Arena zoom</label>
+          <input id="zoom" type="range" min="0.55" max="2.2" step="0.05" value="1" aria-describedby="zoom-note zoom-value">
+          <div class="zoom-row">
+            <button id="zoom-out" type="button" class="zoom-button" aria-label="Zoom out">-</button>
+            <span class="zoom-readout" aria-hidden="true">Nudge</span>
+            <button id="zoom-in" type="button" class="zoom-button" aria-label="Zoom in">+</button>
+          </div>
+          <p class="control-note" id="zoom-note">
+            Pull back to read the whole route map or zoom in when the snakes start forcing traps.
+          </p>
+        </section>
+
+        <section class="control-section rules-section" aria-labelledby="rules-title">
+          <h3 id="rules-title">Match rules</h3>
+          <ul class="rules-list">
+            <li>Rounds never stop until you restart the match.</li>
+            <li>The arena still grows by 1, but each new expansion takes progressively more food from the very start.</li>
+            <li>Food makes a snake longer, and that added length persists across rounds until you restart the match.</li>
+            <li>Head-on collisions eliminate both snakes unless one is longer.</li>
+            <li>The bots weigh food, escape routes, and cutoffs instead of wandering.</li>
+          </ul>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script src="./script.js"></script>
+</body>
+</html>
